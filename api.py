@@ -8,7 +8,7 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 
 
-API_KEY = "7679b027b85c46c7b40133852230703"
+API_KEY = "SECRET_API_KEY"
 logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.DEBUG)
 
 # These error codes can be retried according to WeatherAPI documentation. Ref: https://www.weatherapi.com/docs/#intro-request

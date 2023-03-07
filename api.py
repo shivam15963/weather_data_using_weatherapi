@@ -1,3 +1,4 @@
+# importing required libraries
 import logging
 import xml.etree.ElementTree as ET
 from pydantic import BaseModel, validator
@@ -8,10 +9,12 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 
 
-API_KEY = "SECRET_API_KEY"
+# API key
+API_KEY = "7679b027b85c46c7b40133852230703"
 logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.DEBUG)
 
 # These error codes can be retried according to WeatherAPI documentation. Ref: https://www.weatherapi.com/docs/#intro-request
+# Error codes for retry mechanism
 retry_strategy = Retry(total=5, status_forcelist=[
     500, 503, 504], backoff_factor=2)
 adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -19,24 +22,19 @@ session_object = Session()
 session_object.mount("https://", adapter)
 session_object.mount("http://", adapter)
 
+# creating fastapi/open api App 
 app = FastAPI(title="Verloop Assignment - 1", version="1.0.0", contact={
     "name": "Shivam Mehla"
 }, docs_url="/")
 
 
-class cityParameters(BaseModel):
-    """Class to validate request parameters for /getCurrentWeather
+class validateParameters(BaseModel):
+    # validating the parameters
 
-    Args:
-        BaseModel: Base class for validators
-
-    Raises:
-        HTTPException: Raised when empty city is given
-        HTTPException: Raised when invalid output format is given
-    """
     city: str
     output_format: str
 
+    # validating city field is not null
     @validator("city")
     def check_if_string_is_empty(cls, city):
         if not city:
@@ -44,6 +42,7 @@ class cityParameters(BaseModel):
                 status_code=400, detail="The city string is empty")
         return city
 
+    # Validating output_format
     @validator("output_format")
     def check_if_output_format_is_valid(cls, output_format):
         output_format = output_format.lower()
@@ -56,23 +55,20 @@ class cityParameters(BaseModel):
 
 
 def construct_response(city: str, output_format: str, response: Response) -> Response:
-    """Constructs response in the given format
+    # To construct a response based on the input given
 
-    Args:
-        city (str): city given to us by the user
-        output_format (str): Format in which to send the output. Only "xml", "json" allowed.
-        response (Response): Response object gotten from google maps API
-
-    Returns:
-        Response: A response object to be sent to the user with the requested response format
-    """
     if output_format == "json":
+        # For JSON response
         json_response = response.json()
         json_status_code = response.status_code
+
+        # Creating response as per requirement
         json_output = {"Weather": "",
                        "Latitude": "",
                        "Longitude": "",
                        "City": city}
+
+        # If we get a valid reponse from the API
         if json_status_code == 200:
             try:
                 # [0] is ok because we are sending only one city at a time
@@ -84,8 +80,10 @@ def construct_response(city: str, output_format: str, response: Response) -> Res
                 logging.error(err)
         return JSONResponse(status_code=200, content=json_output, media_type="application/json")
     else:
+        # For XML response
         xml_response = ET.fromstring(response.text)
 
+        # Creating reponse as per the requirement
         xml_output = ET.Element("root")
         temperature_element = ET.SubElement(xml_output, "Temperature")
         city_element = ET.SubElement(xml_output, "City")
@@ -94,6 +92,8 @@ def construct_response(city: str, output_format: str, response: Response) -> Res
         temperature_element.text = ""
         lat_element.text = ""
         lng_element.text = ""
+
+        # If we get a valid reponse from the API
         if xml_response.find("location").find("name").text.lower() == city.lower():
             try:
                 city_element.text = str(xml_response.find("location").find(
@@ -111,21 +111,18 @@ def construct_response(city: str, output_format: str, response: Response) -> Res
 
 
 def get_data_from_weather_api(city: str, output_format: str) -> Response:
-    """Gets data from Weather API and handles errors
+    # Function to get data from weather API
 
-    Args:
-        city (str): The city for which weather needs to be found
-        output_format (str): Format in which to send the output. Only "xml", "json" allowed.
-
-    Raises:
-        HTTPException: Raised when call to API servers fail after multiple retries
-
-    Returns:
-        Response : A response object to be sent to the user with the requested response format
-    """
+    # API used to fulfill the request
     url = f"https://api.weatherapi.com/v1/current.{output_format}"
+
+    # Parameters include q as the city name and key as the API key for the same
     parameters = {"q": city, "key": API_KEY}
+
+    # Getting the response
     response = session_object.get(url=url, params=parameters)
+
+    # Exception Handling
     try:
         response.raise_for_status()
     except HTTPError:
@@ -137,14 +134,9 @@ def get_data_from_weather_api(city: str, output_format: str) -> Response:
 
 
 @app.post("/getCurrentWeather")
-def get_weather_data_for_city(params: cityParameters) -> Response:
-    """Function that gets city as input and gives the weather, latitutde and longitude in the requested format
-
-    Args:
-        params (cityParameters): Request Parameters
-
-    Returns:
-        Response : A response object to be sent to the user with the requested response format
-    """
+def get_weather_data_for_city(params: validateParameters) -> Response:
+    # Main function that takes city and output_format as input
     params = params.dict()
+
+    # Response object got having the requested response
     return get_data_from_weather_api(city=params["city"], output_format=params["output_format"])
